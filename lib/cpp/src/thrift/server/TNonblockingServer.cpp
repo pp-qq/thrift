@@ -857,6 +857,8 @@ TNonblockingServer::~TNonblockingServer() {
 /**
  * Creates a new connection either by reusing an object off the stack or
  * by allocating a new one entirely
+ *
+ * 创建一个 TConnection 对象, 并为其选择一个 iothread(使用 round robin 算法).
  */
 TNonblockingServer::TConnection* TNonblockingServer::createConnection(THRIFT_SOCKET socket,
                                                                       const sockaddr* addr,
