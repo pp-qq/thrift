@@ -26,6 +26,8 @@
 #include <thrift/transport/TSocket.h>
 #include <thrift/concurrency/PlatformThreadFactory.h>
 #include <thrift/transport/PlatformSocket.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include <iostream>
 
@@ -69,6 +71,27 @@
 #define PRIu64 "I64u"
 #endif
 
+namespace {
+
+/* 计算 left - right;并将结果转化为纳秒.
+ * @warning 当 left,right 之间相差太大时,可能会溢出.比如相差 560 年... T_T
+ */
+inline uint_fast64_t GetTimespecDiff(const struct timespec *left, const struct timespec *right) noexcept
+{
+    uint_fast64_t la = left->tv_sec;
+    uint_fast64_t lb = left->tv_nsec;
+    uint_fast64_t ra = right->tv_sec;
+    uint_fast64_t rb = right->tv_nsec;
+    return (la - ra) * 1000000000 + (lb - rb);
+}
+
+inline uint_fast64_t GetTimespecDiff(const struct timespec &left, const struct timespec &right) noexcept {
+    return GetTimespecDiff(&left, &right);
+}
+
+
+} // namespace
+
 namespace apache {
 namespace thrift {
 namespace server {
@@ -106,6 +129,18 @@ enum TAppState {
  * essentially encapsulates a socket that has some associated libevent state.
  */
 class TNonblockingServer::TConnection {
+public:
+    struct {
+        struct timespec connect = {0, 0};
+//        struct timespec read_b = {0, 0};
+//        struct timespec read_e = {0, 0};
+        struct timespec add_task_b = {0, 0};
+        struct timespec add_task_e = {0, 0};
+        struct timespec handle_task_b = {0, 0};
+        struct timespec handle_task_e = {0, 0};
+//        struct timespec write_b = {0, 0};
+        struct timespec write_e = {0, 0};
+    } time_point;
 private:
   /// Server IO Thread handling this connection
   TNonblockingIOThread* ioThread_;
@@ -322,9 +357,12 @@ public:
       connectionContext_(connection_->getConnectionContext()) {}
 
   void run() {
+    clock_gettime(CLOCK_REALTIME, &connection_->time_point.handle_task_b);
     try {
       for (;;) {
         if (serverEventHandler_) {
+          GlobalOutput.printf("WTF2");
+          abort();
           serverEventHandler_->processContext(connectionContext_, connection_->getTSocket());
         }
         if (!processor_->process(input_, output_, connectionContext_)
@@ -344,7 +382,7 @@ public:
     } catch (...) {
       GlobalOutput.printf("TNonblockingServer: unknown exception while processing.");
     }
-
+    clock_gettime(CLOCK_REALTIME, &connection_->time_point.handle_task_e);
     // Signal completion back to the libevent thread via a pipe
     if (!connection_->notifyIOThread()) {
       GlobalOutput.printf("TNonblockingServer: failed to notifyIOThread, closing.");
@@ -368,6 +406,13 @@ void TNonblockingServer::TConnection::init(THRIFT_SOCKET socket,
                                            TNonblockingIOThread* ioThread,
                                            const sockaddr* addr,
                                            socklen_t addrLen) {
+    time_point.connect = {0, 0};
+    time_point.add_task_b = {0, 0};
+    time_point.add_task_e = {0, 0};
+    time_point.handle_task_b = {0, 0};
+    time_point.handle_task_e = {0, 0};
+    time_point.write_e = {0, 0};
+
   tSocket_->setSocketFD(socket);
   tSocket_->setCachedAddress(addr, addrLen);
 
@@ -524,6 +569,7 @@ void TNonblockingServer::TConnection::workSocket() {
 
     // We are done!
     if (writeBufferPos_ == writeBufferSize_) {
+      clock_gettime(CLOCK_REALTIME, &time_point.write_e);
       transition();
     }
 
@@ -570,7 +616,9 @@ void TNonblockingServer::TConnection::transition() {
       appState_ = APP_WAIT_TASK;
 
       try {
+        clock_gettime(CLOCK_REALTIME, &time_point.add_task_b);
         server_->addTask(task);
+        clock_gettime(CLOCK_REALTIME, &time_point.add_task_e);
       } catch (IllegalStateException& ise) {
         // The ThreadManager is not ready to handle any more tasks (it's probably shutting down).
         GlobalOutput.printf("IllegalStateException: Server::process() %s", ise.what());
@@ -586,6 +634,8 @@ void TNonblockingServer::TConnection::transition() {
       setIdle();
       return;
     } else {
+        GlobalOutput.printf("WTF!");
+        abort();
       try {
         if (serverEventHandler_) {
           serverEventHandler_->processContext(connectionContext_, getTSocket());
@@ -649,12 +699,22 @@ void TNonblockingServer::TConnection::transition() {
 
       return;
     }
-
+    GlobalOutput.printf("WTF4");
+    abort();
     // In this case, the request was oneway and we should fall through
     // right back into the read frame header state
     goto LABEL_APP_INIT;
 
   case APP_SEND_RESULT:
+    GlobalOutput.printf("connect: %ld s %ld ns; add_task_b - connect: %llu;"
+                        "add_task_e - add_task_b: %llu; handle_task_b - add_task-e: %llu; "
+                        "handle_task: %llu; write_e - handle_task_b: %llu",
+                        time_point.connect.tv_sec, time_point.connect.tv_nsec,
+                        GetTimespecDiff(time_point.add_task_b, time_point.connect),
+                        GetTimespecDiff(time_point.add_task_e, time_point.add_task_b),
+                        GetTimespecDiff(time_point.handle_task_b, time_point.add_task_e),
+                        GetTimespecDiff(time_point.handle_task_e, time_point.handle_task_b),
+                        GetTimespecDiff(time_point.write_e, time_point.handle_task_e));
     // it's now safe to perform buffer size housekeeping.
     if (writeBufferSize_ > largestWriteBufferSize_) {
       largestWriteBufferSize_ = writeBufferSize_;
@@ -881,6 +941,7 @@ TNonblockingServer::TConnection* TNonblockingServer::createConnection(THRIFT_SOC
     connectionStack_.pop();
     result->init(socket, ioThread, addr, addrLen);
   }
+  clock_gettime(CLOCK_REALTIME, &result->time_point.connect);
   activeConnections_.push_back(result);
   return result;
 }
