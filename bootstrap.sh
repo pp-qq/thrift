@@ -48,7 +48,7 @@ fi
 
 autoscan
 $LIBTOOLIZE --copy --automake
-aclocal -I ./aclocal
+aclocal -I ./aclocal -I /home/bjwangwei6/lib/pkg-config/share/aclocal/
 autoheader
 autoconf
 automake --copy --add-missing --foreign
