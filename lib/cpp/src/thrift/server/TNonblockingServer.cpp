@@ -80,7 +80,7 @@ namespace apache {
 namespace thrift {
 namespace server {
 
-void GetCurrentConnection() noexcept {
+TNonblockingServer::TConnection* GetCurrentConnection() noexcept {
     return t_conn_ptr;
 }
 

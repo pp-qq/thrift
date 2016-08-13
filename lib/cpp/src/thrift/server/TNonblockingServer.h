@@ -1095,7 +1095,7 @@ public:
   void* getConnectionContext() { return connectionContext_; }
 };
 
-void GetCurrentConnection() noexcept;
+TNonblockingServer::TConnection* GetCurrentConnection() noexcept;
 
 }
 }
