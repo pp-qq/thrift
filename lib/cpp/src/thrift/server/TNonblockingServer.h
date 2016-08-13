@@ -867,6 +867,27 @@ private:
   boost::shared_ptr<Thread> thread_;
 };
 
+/// Three states for sockets: recv frame size, recv data, and send mode
+enum TSocketState { SOCKET_RECV_FRAMING, SOCKET_RECV, SOCKET_SEND };
+
+/**
+ * Five states for the nonblocking server:
+ *  1) initialize
+ *  2) read 4 byte frame size
+ *  3) read frame of data
+ *  4) send back data (if any)
+ *  5) force immediate connection close
+ */
+enum TAppState {
+  APP_INIT,
+  APP_READ_FRAME_SIZE,
+  APP_READ_REQUEST,
+  APP_WAIT_TASK,
+  APP_SEND_RESULT,
+  APP_CLOSE_CONNECTION
+};
+
+
 /**
  * Represents a connection that is handled via libevent. This connection
  * essentially encapsulates a socket that has some associated libevent state.

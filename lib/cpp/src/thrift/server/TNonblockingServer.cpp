@@ -73,16 +73,16 @@ namespace {
 
 thread_local apache::thrift::server::TNonblockingServer::TConnection *t_conn_ptr = nullptr;
 
-void GetCurrentConnection() noexcept {
-    return t_conn_ptr;
-}
-
 
 } // namespace
 
 namespace apache {
 namespace thrift {
 namespace server {
+
+void GetCurrentConnection() noexcept {
+    return t_conn_ptr;
+}
 
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
@@ -91,28 +91,6 @@ using namespace std;
 using apache::thrift::transport::TSocket;
 using apache::thrift::transport::TTransportException;
 using boost::shared_ptr;
-
-/// Three states for sockets: recv frame size, recv data, and send mode
-enum TSocketState { SOCKET_RECV_FRAMING, SOCKET_RECV, SOCKET_SEND };
-
-/**
- * Five states for the nonblocking server:
- *  1) initialize
- *  2) read 4 byte frame size
- *  3) read frame of data
- *  4) send back data (if any)
- *  5) force immediate connection close
- */
-enum TAppState {
-  APP_INIT,
-  APP_READ_FRAME_SIZE,
-  APP_READ_REQUEST,
-  APP_WAIT_TASK,
-  APP_SEND_RESULT,
-  APP_CLOSE_CONNECTION
-};
-
-
 
 class TNonblockingServer::TConnection::Task : public Runnable {
 public:
