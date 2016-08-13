@@ -277,3 +277,11 @@ test-driver
 /ylwrap
 
 /cmake_*
+
+# qtcreator
+/thrift.config
+/thrift.files
+/thrift.includes
+/thrift.creator*
+
+
