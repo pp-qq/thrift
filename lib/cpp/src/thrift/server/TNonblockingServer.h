@@ -41,6 +41,23 @@
 #include <event2/event_compat.h>
 #include <event2/event_struct.h>
 
+#include <time.h>
+
+struct TConnectionTimepoint {
+        struct timespec connect = {0, 0};
+//        struct timespec read_b = {0, 0};
+//        struct timespec read_e = {0, 0};
+        struct timespec add_task_b = {0, 0};
+        struct timespec add_task_e = {0, 0};
+        struct timespec handle_task_b = {0, 0};
+        struct timespec handle_task_e = {0, 0};
+//        struct timespec write_b = {0, 0};
+        struct timespec write_e = {0, 0};
+        struct timespec rpc_b = {0, 0};
+        struct timespec rpc_e = {0, 0};
+
+};
+
 namespace apache {
 namespace thrift {
 namespace server {

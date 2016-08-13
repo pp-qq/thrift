@@ -130,17 +130,7 @@ enum TAppState {
  */
 class TNonblockingServer::TConnection {
 public:
-    struct {
-        struct timespec connect = {0, 0};
-//        struct timespec read_b = {0, 0};
-//        struct timespec read_e = {0, 0};
-        struct timespec add_task_b = {0, 0};
-        struct timespec add_task_e = {0, 0};
-        struct timespec handle_task_b = {0, 0};
-        struct timespec handle_task_e = {0, 0};
-//        struct timespec write_b = {0, 0};
-        struct timespec write_e = {0, 0};
-    } time_point;
+    TConnectionTimepoint time_point;
 private:
   /// Server IO Thread handling this connection
   TNonblockingIOThread* ioThread_;
@@ -365,7 +355,7 @@ public:
           abort();
           serverEventHandler_->processContext(connectionContext_, connection_->getTSocket());
         }
-        if (!processor_->process(input_, output_, connectionContext_)
+        if (!processor_->process(input_, output_, &connection_->time_point)
             || !input_->getTransport()->peek()) {
           break;
         }
@@ -706,15 +696,21 @@ void TNonblockingServer::TConnection::transition() {
     goto LABEL_APP_INIT;
 
   case APP_SEND_RESULT:
-    GlobalOutput.printf("connect: %ld s %ld ns; add_task_b - connect: %llu;"
-                        "add_task_e - add_task_b: %llu; handle_task_b - add_task-e: %llu; "
-                        "handle_task: %llu; write_e - handle_task_b: %llu",
+    {
+    auto td1 = GetTimespecDiff(time_point.add_task_b, time_point.connect);
+    auto td2 = GetTimespecDiff(time_point.add_task_e, time_point.add_task_b);
+    auto td3 = GetTimespecDiff(time_point.handle_task_b, time_point.add_task_b);
+    auto td4 = GetTimespecDiff(time_point.handle_task_e, time_point.handle_task_b);
+    auto td6 = GetTimespecDiff(time_point.rpc_e, time_point.rpc_b);
+    auto td5 = GetTimespecDiff(time_point.write_e, time_point.handle_task_e);
+    GlobalOutput.printf("TIMEING!!!connect: %ld s %ld ns; add_task_b - connect: %llu ns;"
+                        "add_task_e - add_task_b: %llu ns; handle_task_b - add_task-b: %llu ns; "
+                        "handle_task: %llu ns; rpc: %llu ns; handle_task - rpc: %llu ns; "
+			"write_e - handle_task_e: %llu ns; total: %llu ns",
                         time_point.connect.tv_sec, time_point.connect.tv_nsec,
-                        GetTimespecDiff(time_point.add_task_b, time_point.connect),
-                        GetTimespecDiff(time_point.add_task_e, time_point.add_task_b),
-                        GetTimespecDiff(time_point.handle_task_b, time_point.add_task_e),
-                        GetTimespecDiff(time_point.handle_task_e, time_point.handle_task_b),
-                        GetTimespecDiff(time_point.write_e, time_point.handle_task_e));
+                        td1, td2, td3, td4, td6, td4 - td6,
+			td5, GetTimespecDiff(time_point.write_e, time_point.connect));
+    }
     // it's now safe to perform buffer size housekeeping.
     if (writeBufferSize_ > largestWriteBufferSize_) {
       largestWriteBufferSize_ = writeBufferSize_;
